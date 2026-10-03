@@ -1,5 +1,5 @@
 {
-  "name": "codegraph",
+  "name": "clerk-nextjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.2",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -25,6 +23,5 @@
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "packageManager": "pnpm@12.8.1"
+  }
 }
