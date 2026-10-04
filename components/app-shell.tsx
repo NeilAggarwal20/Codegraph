@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
+import { UserButton } from '@clerk/nextjs';
 import { ThemeToggle } from './theme-toggle';
 import { ActiveOrgContext } from '@/lib/org';
 import { OrgSync } from './org-sync';
@@ -32,18 +32,7 @@ export function AppShell({ activeOrg, children }: AppShellProps) {
 
           {/* Organization Switcher */}
           <div className="flex items-center gap-2">
-            <OrganizationSwitcher
-              afterCreateOrganizationUrl="/"
-              afterLeaveOrganizationUrl="/"
-              afterSelectOrganizationUrl="/"
-              appearance={{
-                elements: {
-                  rootBox: 'flex items-center',
-                  organizationSwitcherTrigger:
-                    'flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs font-mono bg-background text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors',
-                },
-              }}
-            />
+
           </div>
         </div>
 

@@ -1,0 +1,48 @@
+import type { ParserResult } from './types.ts';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Parse and validate a parser artifact before downstream code trusts its shape. */
+export function readParserResult(value: unknown): ParserResult {
+  if (!isRecord(value) || value.schemaVersion !== 1 || typeof value.root !== 'string') {
+    throw new Error('Invalid parser artifact header.');
+  }
+  if (!isRecord(value.stats) || !Array.isArray(value.files) || !Array.isArray(value.edges) ||
+      !isRecord(value.coverage) || !Array.isArray(value.coverage.records) || !Array.isArray(value.skippedFiles)) {
+    throw new Error('Invalid parser artifact structure.');
+  }
+  const stats = value.stats;
+  const coverage = value.coverage;
+  const counts = ['filesFound', 'filesParsed', 'filesSkipped', 'reExportsFound', 'reExportsResolved', 'folders'];
+  if (counts.some((key) => typeof stats[key] !== 'number')) throw new Error('Invalid parser statistics.');
+  const coverageCounts = ['importsSeen', 'resolved', 'external', 'excluded', 'unresolved'];
+  if (coverageCounts.some((key) => typeof coverage[key] !== 'number')) throw new Error('Invalid coverage statistics.');
+  for (const file of value.files) {
+    if (!isRecord(file) || ['path', 'folder', 'module', 'kind', 'sha256'].some((key) => typeof file[key] !== 'string') ||
+        ['lines', 'fanIn', 'fanOut'].some((key) => typeof file[key] !== 'number')) {
+      throw new Error('Invalid file record.');
+    }
+  }
+  for (const edge of value.edges) {
+    if (!isRecord(edge) || typeof edge.from !== 'string' || typeof edge.to !== 'string' ||
+        !['import', 're-export', 'dynamic-import'].includes(String(edge.kind))) {
+      throw new Error('Invalid dependency edge.');
+    }
+  }
+  for (const record of value.coverage.records) {
+    if (!isRecord(record) || typeof record.from !== 'string' || typeof record.specifier !== 'string' ||
+        !['import', 're-export', 'dynamic-import'].includes(String(record.kind)) ||
+        !['resolved', 'external', 'excluded', 'unresolved'].includes(String(record.status))) {
+      throw new Error('Invalid import coverage record.');
+    }
+  }
+  for (const skipped of value.skippedFiles) {
+    if (!isRecord(skipped) || typeof skipped.path !== 'string' || typeof skipped.reason !== 'string') {
+      throw new Error('Invalid skipped-file record.');
+    }
+  }
+  return value as unknown as ParserResult;
+}
+
