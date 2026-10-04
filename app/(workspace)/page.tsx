@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { fetchAnalyses } from "@/lib/queries";
 import type { AnalysisRow } from "@/lib/types";
 import Link from "next/link";
+import { Fragment } from "react";
 
 function formatTimestamp(iso: string | null): string {
   if (!iso) return "—";
@@ -63,7 +64,14 @@ export default async function WorkspacePage() {
   const orgName = org.name;
 
   // Real data fetched from Supabase via RLS using Clerk JWT token (no application-level org filter)
-  const analyses: AnalysisRow[] = await fetchAnalyses();
+  let analyses: AnalysisRow[] = [];
+  let analysesFailed = false;
+  try {
+    analyses = await fetchAnalyses();
+  } catch (error) {
+    console.error("Failed to load organization analyses:", error);
+    analysesFailed = true;
+  }
   const totalCount = analyses.length;
 
   return (
@@ -75,7 +83,7 @@ export default async function WorkspacePage() {
             {orgName}
           </h1>
           <p className="mt-1 font-mono text-sm text-fg-muted">
-            {totalCount} {totalCount === 1 ? "analysis" : "analyses"}
+            {analysesFailed ? "Analyses unavailable" : `${totalCount} ${totalCount === 1 ? "analysis" : "analyses"}`}
           </p>
         </div>
         <Link
@@ -87,7 +95,11 @@ export default async function WorkspacePage() {
       </div>
 
       {/* Real Analyses Table or Empty State */}
-      {totalCount === 0 ? (
+      {analysesFailed ? (
+        <div role="alert" className="rounded-lg border border-rose-600/20 bg-rose-600/5 px-6 py-8 text-center font-mono text-sm text-rose-700 dark:text-rose-400">
+          Could not load analyses for this organization. Try refreshing the page.
+        </div>
+      ) : totalCount === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line bg-surface px-6 py-16 text-center">
           <p className="font-mono text-base text-fg-muted">
             No analyses yet for this organization.
@@ -110,35 +122,39 @@ export default async function WorkspacePage() {
             </thead>
             <tbody className="divide-y divide-line">
               {analyses.map((a) => (
-                <tr key={a.id} className="hover:bg-raised/50">
-                  <td className="px-4 py-3 text-fg">
-                    {a.projects?.name ?? a.project_id}
-                  </td>
-                  <td className="px-4 py-3">{statusBadge(a.status)}</td>
-                  <td className="px-4 py-3 text-fg-muted">
-                    {a.commit_sha ? (
-                      <code className="rounded bg-raised px-1.5 py-0.5 text-xs">
-                        {a.commit_sha}
-                      </code>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-fg-muted">
-                    {formatTimestamp(a.created_at)}
-                  </td>
-                  <td className="px-4 py-3 text-fg-muted">
-                    {formatTimestamp(a.completed_at)}
-                  </td>
-                  {a.error_message && (
-                    <td
-                      colSpan={5}
-                      className="border-t border-rose-600/20 bg-rose-600/5 px-4 py-2 text-xs text-rose-700 dark:text-rose-400"
-                    >
-                      {a.error_message}
+                <Fragment key={a.id}>
+                  <tr className="hover:bg-raised/50">
+                    <td className="px-4 py-3 text-fg">
+                      {a.projects?.name ?? a.project_id}
                     </td>
+                    <td className="px-4 py-3">{statusBadge(a.status)}</td>
+                    <td className="px-4 py-3 text-fg-muted">
+                      {a.commit_sha ? (
+                        <code className="rounded bg-raised px-1.5 py-0.5 text-xs">
+                          {a.commit_sha}
+                        </code>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-fg-muted">
+                      {formatTimestamp(a.created_at)}
+                    </td>
+                    <td className="px-4 py-3 text-fg-muted">
+                      {formatTimestamp(a.completed_at)}
+                    </td>
+                  </tr>
+                  {a.error_message && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="border-t border-rose-600/20 bg-rose-600/5 px-4 py-2 text-xs text-rose-700 dark:text-rose-400"
+                      >
+                        {a.error_message}
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -203,7 +203,7 @@ export async function parseRepository(
   const reExportsResolved = records.filter((record) => record.kind === 're-export' && record.status === 'resolved').length;
   return {
     schemaVersion: 1,
-    root,
+    root: path.basename(root),
     stats: {
       filesFound: discovered.length,
       filesParsed: parsedFiles.length,

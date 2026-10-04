@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { AnalysisRow } from '@/lib/types';
 import { handleSeedAnalyses } from '@/app/actions';
 
@@ -12,10 +12,12 @@ interface DashboardProps {
 
 export function Dashboard({ analyses, orgId, orgName }: DashboardProps) {
   const [isPending, startTransition] = useTransition();
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   const onSeedClick = () => {
     startTransition(async () => {
-      await handleSeedAnalyses(orgId);
+      const result = await handleSeedAnalyses();
+      setSeedError(result.success ? null : result.error ?? 'Failed to seed analyses');
     });
   };
 
@@ -66,6 +68,7 @@ export function Dashboard({ analyses, orgId, orgName }: DashboardProps) {
   return (
     <div className="flex flex-1 flex-col p-6 overflow-y-auto font-sans">
       <div className="max-w-4xl space-y-6">
+        {seedError && <p role="alert" className="font-mono text-xs text-rose-600">{seedError}</p>}
         {/* Header section */}
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
