@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "parse": "node --experimental-default-type=module --disable-warning=ExperimentalWarning --experimental-strip-types scripts/parse-repository.mts"
+    "parse": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/parse-repository.mts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

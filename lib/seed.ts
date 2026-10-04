@@ -8,16 +8,14 @@ export async function fetchAnalysesForCurrentOrg(
   const supabase = await createClerkSupabaseClient();
 
   // Ensure organization row exists in database for foreign key constraints
-  try {
-    await supabase
-      .from('organizations')
-      .upsert({ id: orgId, name: orgName }, { onConflict: 'id' });
-  } catch (err) {
-    console.error('Failed to upsert organization record:', err);
+  const { error: organizationError } = await supabase
+    .from('organizations')
+    .upsert({ id: orgId, name: orgName }, { onConflict: 'id' });
+  if (organizationError) {
+    console.error('Failed to upsert organization record:', organizationError);
   }
 
-  // Pure query over analyses table with ZERO application-level org filtering.
-  // Row Level Security policy "org_id = (auth.jwt() ->> 'org_id')" enforces organization scoping in Postgres.
+  // RLS scopes this query from the active organization claim in the Clerk JWT.
   const { data: analyses, error } = await supabase
     .from('analyses')
     .select(

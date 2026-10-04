@@ -98,39 +98,58 @@ ALTER TABLE public.explanations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.file_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.insights ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies checking auth.jwt() ->> 'org_id'
+-- RLS resolves the active organization from org_id or Clerk's default o.id claim.
 DROP POLICY IF EXISTS "Org members access organization" ON public.organizations;
 CREATE POLICY "Org members access organization" ON public.organizations
-  FOR ALL USING (id = (auth.jwt() ->> 'org_id')) WITH CHECK (id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access projects" ON public.projects;
 CREATE POLICY "Org members access projects" ON public.projects
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access analyses" ON public.analyses;
 CREATE POLICY "Org members access analyses" ON public.analyses
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access files" ON public.files;
 CREATE POLICY "Org members access files" ON public.files
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access edges" ON public.edges;
 CREATE POLICY "Org members access edges" ON public.edges
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access routes" ON public.routes;
 CREATE POLICY "Org members access routes" ON public.routes
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access explanations" ON public.explanations;
 CREATE POLICY "Org members access explanations" ON public.explanations
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access file_roles" ON public.file_roles;
 CREATE POLICY "Org members access file_roles" ON public.file_roles
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
 
 DROP POLICY IF EXISTS "Org members access insights" ON public.insights;
 CREATE POLICY "Org members access insights" ON public.insights
-  FOR ALL USING (org_id = (auth.jwt() ->> 'org_id')) WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  FOR ALL USING (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')))
+  WITH CHECK (org_id = (SELECT COALESCE(auth.jwt() ->> 'org_id', auth.jwt() -> 'o' ->> 'id')));
+
+CREATE INDEX IF NOT EXISTS projects_org_id_idx ON public.projects (org_id);
+CREATE INDEX IF NOT EXISTS analyses_org_id_idx ON public.analyses (org_id);
+CREATE INDEX IF NOT EXISTS analyses_org_id_created_at_idx ON public.analyses (org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS files_org_id_idx ON public.files (org_id);
+CREATE INDEX IF NOT EXISTS edges_org_id_idx ON public.edges (org_id);
+CREATE INDEX IF NOT EXISTS routes_org_id_idx ON public.routes (org_id);
+CREATE INDEX IF NOT EXISTS explanations_org_id_idx ON public.explanations (org_id);
+CREATE INDEX IF NOT EXISTS file_roles_org_id_idx ON public.file_roles (org_id);
+CREATE INDEX IF NOT EXISTS insights_org_id_idx ON public.insights (org_id);

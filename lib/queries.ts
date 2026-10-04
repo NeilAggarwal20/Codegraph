@@ -6,7 +6,7 @@ import type { AnalysisRow } from './types';
  *
  * There is no application-level org filter here. Row Level Security on the
  * analyses table restricts results to rows whose org_id matches the org_id
- * claim inside the Clerk JWT that was passed to Supabase.
+ * claim inside the Clerk JWT (org_id or Clerk's o.id claim) passed to Supabase.
  */
 export async function fetchAnalyses(): Promise<AnalysisRow[]> {
   const supabase = await createClerkSupabaseClient();
@@ -19,8 +19,7 @@ export async function fetchAnalyses(): Promise<AnalysisRow[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Supabase analyses query error:', error);
-    return [];
+    throw new Error('Failed to fetch organization analyses.', { cause: error });
   }
 
   return (data ?? []) as unknown as AnalysisRow[];
