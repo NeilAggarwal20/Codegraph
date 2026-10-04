@@ -6,15 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "parse": "node --experimental-default-type=module --disable-warning=ExperimentalWarning --experimental-strip-types scripts/parse-repository.mts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",
+    "@dagrejs/dagre": "^3.1.1",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
+    "@xyflow/react": "^12.12.0",
     "next": "16.3.8",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "ts-morph": "^28.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

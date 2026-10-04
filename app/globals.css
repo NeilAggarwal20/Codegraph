@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light dark;
+
+  --canvas: light-dark(#fafafa, #0c0c0d);
+  --surface: light-dark(#ffffff, #131315);
+  --raised: light-dark(#f0f0f2, #1d1d20);
+  --line: light-dark(#e3e3e7, #2a2a2e);
+  --line-strong: light-dark(#b9b9c1, #48484f);
+  --fg: light-dark(#18181b, #e6e6e9);
+  --fg-muted: light-dark(#6b6b73, #8d8d96);
+  --accent: light-dark(#2563eb, #4f8bff);
+  --accent-fg: #ffffff;
+  --incoming: light-dark(#7c3aed, #b794ff);
+  --outgoing: light-dark(#0e7490, #22d3ee);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100%;
+  margin: 0;
+  background: var(--canvas);
+  color: var(--fg);
+}
+
+.react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  fill: var(--fg-muted);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--raised);
+  fill: var(--fg);
 }
