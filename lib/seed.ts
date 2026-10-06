@@ -19,7 +19,7 @@ export async function fetchAnalysesForCurrentOrg(
   const { data: analyses, error } = await supabase
     .from('analyses')
     .select(
-      'id, project_id, org_id, commit_sha, status, error_message, parsed_files_count, created_at, completed_at, projects(id, name, repo_url)'
+      'id, project_id, org_id, commit_sha, status, stage, stage_message, updated_at, error_message, parsed_files_count, created_at, completed_at, projects(id, name, repo_url)'
     )
     .order('created_at', { ascending: false });
 

@@ -15,6 +15,9 @@ export interface AnalysisRow {
   org_id: string;
   commit_sha: string | null;
   status: AnalysisStatus;
+  stage: string;
+  stage_message: string;
+  updated_at: string;
   error_message: string | null;
   parsed_files_count: number;
   created_at: string;

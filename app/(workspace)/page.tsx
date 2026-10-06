@@ -4,6 +4,8 @@ import { fetchAnalyses } from "@/lib/queries";
 import type { AnalysisRow } from "@/lib/types";
 import Link from "next/link";
 import { Fragment } from "react";
+import { AnalysisStageIndicator } from "@/components/analysis-stage-indicator";
+import { RepositoryAnalysisForm } from "@/components/repository-analysis-form";
 
 function formatTimestamp(iso: string | null): string {
   if (!iso) return "—";
@@ -14,39 +16,6 @@ function formatTimestamp(iso: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function statusBadge(status: string) {
-  switch (status) {
-    case "completed":
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded border border-emerald-600/30 bg-emerald-600/10 px-2 py-0.5 font-mono text-xs text-emerald-700 dark:text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          completed
-        </span>
-      );
-    case "parsing":
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded border border-amber-600/30 bg-amber-600/10 px-2 py-0.5 font-mono text-xs text-amber-700 dark:text-amber-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          parsing
-        </span>
-      );
-    case "failed":
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded border border-rose-600/30 bg-rose-600/10 px-2 py-0.5 font-mono text-xs text-rose-700 dark:text-rose-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-          failed
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded border border-line bg-raised px-2 py-0.5 font-mono text-xs text-fg-muted">
-          <span className="h-1.5 w-1.5 rounded-full bg-fg-muted" />
-          {status}
-        </span>
-      );
-  }
 }
 
 export default async function WorkspacePage() {
@@ -66,11 +35,13 @@ export default async function WorkspacePage() {
   // Real data fetched from Supabase via RLS using Clerk JWT token (no application-level org filter)
   let analyses: AnalysisRow[] = [];
   let analysesFailed = false;
+  let analysesErrorMessage = 'Could not load analyses for this organization. Try refreshing the page.';
   try {
     analyses = await fetchAnalyses();
   } catch (error) {
     console.error("Failed to load organization analyses:", error);
     analysesFailed = true;
+    if (error instanceof Error) analysesErrorMessage = error.message;
   }
   const totalCount = analyses.length;
 
@@ -94,10 +65,12 @@ export default async function WorkspacePage() {
         </Link>
       </div>
 
+      <RepositoryAnalysisForm />
+
       {/* Real Analyses Table or Empty State */}
       {analysesFailed ? (
         <div role="alert" className="rounded-lg border border-rose-600/20 bg-rose-600/5 px-6 py-8 text-center font-mono text-sm text-rose-700 dark:text-rose-400">
-          Could not load analyses for this organization. Try refreshing the page.
+          {analysesErrorMessage}
         </div>
       ) : totalCount === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line bg-surface px-6 py-16 text-center">
@@ -125,9 +98,11 @@ export default async function WorkspacePage() {
                 <Fragment key={a.id}>
                   <tr className="hover:bg-raised/50">
                     <td className="px-4 py-3 text-fg">
-                      {a.projects?.name ?? a.project_id}
+                      <Link href={`/analysis/${a.id}/progress`} className="cursor-pointer hover:text-accent">
+                        {a.projects?.name ?? a.project_id}
+                      </Link>
                     </td>
-                    <td className="px-4 py-3">{statusBadge(a.status)}</td>
+                    <td className="px-4 py-3"><AnalysisStageIndicator analysis={a} /></td>
                     <td className="px-4 py-3 text-fg-muted">
                       {a.commit_sha ? (
                         <code className="rounded bg-raised px-1.5 py-0.5 text-xs">
