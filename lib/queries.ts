@@ -54,12 +54,18 @@ interface StoredEdgeRow {
   kind: string;
 }
 
+interface StoredRouteRow {
+  method: string;
+  path: string;
+  file_id: string;
+}
+
 export async function fetchStoredParserResult(analysisId: string) {
   const supabase = await createClerkSupabaseClient();
-  const [artifactResult, filesResult, edgesResult] = await Promise.all([
+  const [artifactResult, filesResult, edgesResult, routesResult] = await Promise.all([
     supabase
       .from('analysis_artifacts')
-      .select('schema_version, root, stats, coverage, skipped_files')
+      .select('schema_version, root, framework, stats, coverage, skipped_files')
       .eq('analysis_id', analysisId)
       .single(),
     supabase
@@ -70,6 +76,10 @@ export async function fetchStoredParserResult(analysisId: string) {
       .from('edges')
       .select('source_file_id, target_file_id, kind')
       .eq('analysis_id', analysisId),
+    supabase
+      .from('routes')
+      .select('method, path, file_id')
+      .eq('analysis_id', analysisId),
   ]);
 
   if (artifactResult.error || !artifactResult.data) {
@@ -77,6 +87,7 @@ export async function fetchStoredParserResult(analysisId: string) {
   }
   if (filesResult.error) throw new Error('Could not load the stored repository files.', { cause: filesResult.error });
   if (edgesResult.error) throw new Error('Could not load the stored dependency edges.', { cause: edgesResult.error });
+  if (routesResult.error) throw new Error('Could not load the extracted repository routes.', { cause: routesResult.error });
 
   const files = (filesResult.data ?? []) as unknown as StoredFileRow[];
   const pathById = new Map(files.map((file) => [file.id, file.path]));
@@ -86,10 +97,16 @@ export async function fetchStoredParserResult(analysisId: string) {
     if (!from || !to) throw new Error('The stored analysis contains an edge with a missing file.');
     return { from, to, kind: edge.kind };
   });
+  const routes = ((routesResult.data ?? []) as unknown as StoredRouteRow[]).map((route) => {
+    const file = pathById.get(route.file_id);
+    if (!file) throw new Error('The stored analysis contains a route with a missing file.');
+    return { method: route.method, path: route.path, file };
+  });
 
   return readParserResult({
     schemaVersion: artifactResult.data.schema_version,
     root: artifactResult.data.root,
+    framework: artifactResult.data.framework,
     stats: artifactResult.data.stats,
     coverage: artifactResult.data.coverage,
     skippedFiles: artifactResult.data.skipped_files,
@@ -104,5 +121,6 @@ export async function fetchStoredParserResult(analysisId: string) {
       fanOut: file.fan_out,
     })),
     edges,
+    routes,
   });
 }

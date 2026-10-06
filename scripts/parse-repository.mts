@@ -13,8 +13,10 @@ async function main(): Promise<void> {
   }
 
   const result = await parseRepository(directory);
+  console.log(`Framework: ${result.framework}.`);
   console.log(`Files: ${result.stats.filesFound} found, ${result.stats.filesParsed} parsed, ${result.stats.filesSkipped} skipped.`);
   console.log(`Folders: ${result.stats.folders}.`);
+  console.log(`Routes: ${result.routes.length} extracted.`);
   console.log(`Re-exports: ${result.stats.reExportsResolved} resolved / ${result.stats.reExportsFound} found.`);
   console.log(`Imports: ${result.coverage.importsSeen} seen; ${result.coverage.resolved} resolved, ${result.coverage.external} external, ${result.coverage.excluded} excluded, ${result.coverage.unresolved} unresolved.`);
   for (const skipped of result.skippedFiles) console.log(`Skipped ${skipped.path}: ${skipped.reason}`);

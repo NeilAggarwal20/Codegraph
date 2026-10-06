@@ -8,7 +8,7 @@ export interface ParsedFile {
   module: string;
   kind: string;
   lines: number;
-  sha256: string;
+  sha256: string | null;
   fanIn: number;
   fanOut: number;
 }
@@ -36,6 +36,7 @@ export interface SkippedFile {
 export interface ParserResult {
   schemaVersion: 1;
   root: string;
+  framework: string;
   stats: {
     filesFound: number;
     filesParsed: number;
@@ -46,6 +47,7 @@ export interface ParserResult {
   };
   files: ParsedFile[];
   edges: DependencyEdge[];
+  routes: FrameworkRoute[];
   coverage: {
     importsSeen: number;
     resolved: number;
@@ -57,12 +59,26 @@ export interface ParserResult {
   skippedFiles: SkippedFile[];
 }
 
+export interface FrameworkRoute {
+  method: string;
+  path: string;
+  file: string;
+}
+
 export interface FileIdentity {
   module: string;
   kind: string;
 }
 
 export interface FrameworkAdapter {
-  identifyFile(relativePath: string): FileIdentity;
+  framework: string;
+  matches(context: AdapterContext): boolean;
+  identifyFile(relativePath: string, sourceFile: import('ts-morph').SourceFile): FileIdentity;
+  extractRoutes(sourceFiles: readonly import('ts-morph').SourceFile[], relativePathByAbsolute: ReadonlyMap<string, string>): FrameworkRoute[];
+}
+
+export interface AdapterContext {
+  packageJson: unknown;
+  relativePaths: readonly string[];
 }
 

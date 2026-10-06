@@ -1,10 +1,16 @@
 import type { FileIdentity, FrameworkAdapter } from './types.ts';
+import { moduleName } from './adapters/shared.ts';
 
 /** Framework-free identity: one module per source file, with no route guesses. */
 export const fallbackAdapter: FrameworkAdapter = {
+  framework: 'Generic',
+  matches(): boolean {
+    return true;
+  },
   identifyFile(relativePath: string): FileIdentity {
-    const moduleName = relativePath.replace(/\.(?:[cm]?[jt]sx?)$/i, '');
-    return { module: moduleName, kind: 'module' };
+    return { module: moduleName(relativePath), kind: 'Modules' };
+  },
+  extractRoutes() {
+    return [];
   },
 };
-
