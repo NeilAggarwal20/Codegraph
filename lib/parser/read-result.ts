@@ -20,7 +20,8 @@ export function readParserResult(value: unknown): ParserResult {
   const coverageCounts = ['importsSeen', 'resolved', 'external', 'excluded', 'unresolved'];
   if (coverageCounts.some((key) => typeof coverage[key] !== 'number')) throw new Error('Invalid coverage statistics.');
   for (const file of value.files) {
-    if (!isRecord(file) || ['path', 'folder', 'module', 'kind', 'sha256'].some((key) => typeof file[key] !== 'string') ||
+    if (!isRecord(file) || ['path', 'folder', 'module', 'kind'].some((key) => typeof file[key] !== 'string') ||
+        (typeof file.sha256 !== 'string' && file.sha256 !== null) ||
         ['lines', 'fanIn', 'fanOut'].some((key) => typeof file[key] !== 'number')) {
       throw new Error('Invalid file record.');
     }
@@ -43,6 +44,13 @@ export function readParserResult(value: unknown): ParserResult {
       throw new Error('Invalid skipped-file record.');
     }
   }
-  return value as unknown as ParserResult;
+  const framework = value.framework ?? 'Generic';
+  if (typeof framework !== 'string') throw new Error('Invalid framework identity.');
+  const routes = value.routes ?? [];
+  if (!Array.isArray(routes) || routes.some((route) => !isRecord(route) ||
+      typeof route.method !== 'string' || typeof route.path !== 'string' || typeof route.file !== 'string')) {
+    throw new Error('Invalid extracted routes.');
+  }
+  return { ...value, framework, routes } as unknown as ParserResult;
 }
 

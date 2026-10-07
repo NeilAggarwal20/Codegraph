@@ -37,9 +37,11 @@ function makeStorageArtifact(result: ParserResult) {
   return {
     schemaVersion: result.schemaVersion,
     root: result.root,
+    framework: result.framework,
     stats: result.stats,
     coverage: result.coverage,
     skippedFiles: result.skippedFiles,
+    routes: result.routes,
     files: result.files.map((file) => ({
       path: file.path,
       lines: file.lines,

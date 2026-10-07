@@ -3,10 +3,9 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { Project, SyntaxKind, ts } from 'ts-morph';
-import { fallbackAdapter } from './fallback-adapter.ts';
+import { selectFrameworkAdapter } from './select-adapter.ts';
 import type {
   DependencyEdge,
-  FrameworkAdapter,
   ImportCoverageRecord,
   ImportKind,
   ParsedFile,
@@ -119,7 +118,6 @@ function classifyResolution(
 
 export async function parseRepository(
   directory: string,
-  adapter: FrameworkAdapter = fallbackAdapter,
 ): Promise<ParserResult> {
   const root = await realpath(path.resolve(directory));
   const discovered = await discoverFiles(root);
@@ -134,10 +132,14 @@ export async function parseRepository(
   }
   for (const file of discovered) project.addSourceFileAtPath(file);
 
+  const relativePaths = discovered.map((file) => toPosix(path.relative(root, file)));
+  const adapter = await selectFrameworkAdapter(root, relativePaths);
+
   const parsedFiles: ParsedFile[] = [];
   const skippedFiles: SkippedFile[] = [];
   const occurrences: Array<{ from: string; fromAbsolute: string; occurrence: ImportOccurrence }> = [];
   const relativeByAbsolute = new Map<string, string>();
+  const relativeBySourceFile = new Map<string, string>();
 
   for (const absolute of discovered) {
     const relative = toPosix(path.relative(root, absolute));
@@ -146,8 +148,9 @@ export async function parseRepository(
       const contents = await readFile(absolute, 'utf8');
       const sourceFile = project.getSourceFile(absolute);
       if (!sourceFile) throw new Error('ts-morph did not create a source file.');
+      relativeBySourceFile.set(sourceFile.getFilePath(), relative);
       const folder = toPosix(path.dirname(path.relative(root, absolute))) || '.';
-      const identity = adapter.identifyFile(relative);
+      const identity = adapter.identifyFile(relative, sourceFile);
       parsedFiles.push({
         path: relative,
         folder,
@@ -201,9 +204,11 @@ export async function parseRepository(
 
   const reExportsFound = records.filter((record) => record.kind === 're-export').length;
   const reExportsResolved = records.filter((record) => record.kind === 're-export' && record.status === 'resolved').length;
+  const sourceFiles = discovered.map((file) => project.getSourceFile(file)).filter((file): file is NonNullable<typeof file> => Boolean(file));
   return {
     schemaVersion: 1,
     root: path.basename(root),
+    framework: adapter.framework,
     stats: {
       filesFound: discovered.length,
       filesParsed: parsedFiles.length,
@@ -214,6 +219,7 @@ export async function parseRepository(
     },
     files: parsedFiles.sort((a, b) => a.path.localeCompare(b.path)),
     edges,
+    routes: adapter.extractRoutes(sourceFiles, relativeBySourceFile),
     coverage: {
       importsSeen: records.length,
       resolved: records.filter((record) => record.status === 'resolved').length,

@@ -22,6 +22,7 @@ import {
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldRepository, type FoldedGraph } from '@/lib/graph/folded-graph';
 import { findFilesNothingImports, findImportCycles, walkGraph } from '@/lib/graph/analysis';
+import { countFrameworkRoles, frameworkNames } from '@/lib/framework/taxonomy';
 import type { WalkDirection } from '@/lib/graph/analysis';
 import type { DependencyEdge, ParsedFile, ParserResult } from '@/lib/parser/types';
 
@@ -184,7 +185,7 @@ function getFlowNodes(
   const positions = getPositions(graph, expandedFolders);
   return graph.nodes.map((node) => {
     const expanded = expandedFolders.has(node.id);
-    const matchingFiles = selectedCategory ? node.files.filter((file) => getFileExtension(file.path) === selectedCategory) : node.files;
+    const matchingFiles = selectedCategory ? node.files.filter((file) => file.kind === selectedCategory) : node.files;
     return {
       id: node.id,
       type: folderNodeType,
@@ -236,7 +237,7 @@ function getFlowEdges(
       const touchesFocusedFile = focus?.filePath !== undefined && member !== null &&
         (member.from === focus.filePath || member.to === focus.filePath);
       const categoryMatches = selectedCategory === null || (member !== null &&
-        (sourceNode.files.some((file) => file.path === member.from && getFileExtension(file.path) === selectedCategory) || targetNode.files.some((file) => file.path === member.to && getFileExtension(file.path) === selectedCategory)));
+        (sourceNode.files.some((file) => file.path === member.from && file.kind === selectedCategory) || targetNode.files.some((file) => file.path === member.to && file.kind === selectedCategory)));
       const dimmed = (focus !== null && (focus.filePath ? !touchesFocusedFile : !inFocusedGroup)) || !categoryMatches;
       const isFocusedOutgoing = focus?.filePath
         ? member?.from === focus.filePath
@@ -279,8 +280,8 @@ function getFlowEdges(
     const selectedFile = focus?.filePath;
     const touchesFocusedFile = selectedFile !== undefined && (member.from === selectedFile || member.to === selectedFile);
     const categoryMatches = selectedCategory === null ||
-      graph.fileOwners.get(member.from) === folder && graph.nodes.find((node) => node.id === folder)?.files.some((file) => file.path === member.from && getFileExtension(file.path) === selectedCategory) ||
-      graph.fileOwners.get(member.to) === folder && graph.nodes.find((node) => node.id === folder)?.files.some((file) => file.path === member.to && getFileExtension(file.path) === selectedCategory);
+      graph.fileOwners.get(member.from) === folder && graph.nodes.find((node) => node.id === folder)?.files.some((file) => file.path === member.from && file.kind === selectedCategory) ||
+      graph.fileOwners.get(member.to) === folder && graph.nodes.find((node) => node.id === folder)?.files.some((file) => file.path === member.to && file.kind === selectedCategory);
     const dimmed = (focus !== null && (selectedFile ? !touchesFocusedFile : focus.nodeId !== folder)) || !categoryMatches;
     const isFocusedOutgoing = selectedFile ? member.from === selectedFile : focus?.nodeId === folder;
     const isFocusedIncoming = selectedFile ? member.to === selectedFile : focus?.nodeId === folder;
@@ -385,10 +386,10 @@ function FolderNodeView({ id, data }: NodeProps<FolderFlowNode>) {
       >
         <div className="sticky top-0 z-10 flex h-6 items-center justify-between border-b border-line bg-surface px-2.5 font-mono text-[9px] text-fg-muted">
           <span>{data.files.length} files</span>
-          {data.selectedCategory && <span>{data.files.filter((file) => getFileExtension(file.path) === data.selectedCategory).length} match{data.files.filter((file) => getFileExtension(file.path) === data.selectedCategory).length === 1 ? '' : 'es'}</span>}
+          {data.selectedCategory && <span>{data.files.filter((file) => file.kind === data.selectedCategory).length} match{data.files.filter((file) => file.kind === data.selectedCategory).length === 1 ? '' : 'es'}</span>}
         </div>
         {data.files.map((file) => {
-          const rowDimmed = data.dimmed || (data.focusActive && !data.highlightedFilePaths.includes(file.path)) || (data.selectedCategory !== null && getFileExtension(file.path) !== data.selectedCategory);
+          const rowDimmed = data.dimmed || (data.focusActive && !data.highlightedFilePaths.includes(file.path)) || (data.selectedCategory !== null && file.kind !== data.selectedCategory);
           const selected = data.selectedFilePath === file.path;
           return (
             <div key={file.path} className="relative h-[25px] border-b border-line/70">
@@ -426,20 +427,6 @@ function getKindCounts(files: ParsedFile[]): Array<{ kind: string; count: number
   const counts = new Map<string, number>();
   for (const file of files) counts.set(file.kind, (counts.get(file.kind) ?? 0) + 1);
   return [...counts.entries()].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
-}
-
-function getFileExtension(filePath: string): string {
-  const basename = filePath.split('/').at(-1) ?? filePath;
-  return basename.match(/(\.[^.]+)$/)?.[1] ?? '(no extension)';
-}
-
-function getExtensionCounts(files: ParsedFile[]): Array<{ kind: string; count: number }> {
-  const counts = new Map<string, number>();
-  for (const file of files) {
-    const extension = getFileExtension(file.path);
-    counts.set(extension, (counts.get(extension) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([kind, count]) => ({ kind, count })).sort((a, b) => a.kind.localeCompare(b.kind));
 }
 
 function highFanInFiles(files: ParsedFile[]): ParsedFile[] {
@@ -513,9 +500,9 @@ function DetailPane({
   const filesNothingImports = [...analysis.files]
     .filter((file) => file.fanIn === 0)
     .sort((a, b) => b.fanOut - a.fanOut || a.path.localeCompare(b.path));
-  const routeCount = analysis.files.filter((file) => /route|endpoint/i.test(file.kind)).length;
+  const routeCount = analysis.routes.length;
   const routeDisplay = routeCount === 0 ? '—' : routeCount;
-  const unclassifiedCount = analysis.files.filter((file) => file.kind === 'module').length;
+  const unclassifiedCount = analysis.files.filter((file) => file.kind === 'Modules' || file.kind === 'module').length;
   const folderKinds = selectedFolder ? getKindCounts(selectedFolder.files) : [];
   const [walkDirection, setWalkDirection] = useState<WalkDirection | null>(null);
   const walkEntries = selectedFile && walkDirection
@@ -596,7 +583,7 @@ function DetailPane({
           <div className="space-y-3">
             <section className="space-y-1 px-2">
               <h2 className="font-mono text-[14px] font-semibold text-fg">{getRepositoryName(analysis.root)}</h2>
-              <p className="font-mono text-[11px] text-fg">Framework · Not detected</p>
+              <p className="font-mono text-[11px] text-fg">Framework · {frameworkNames[analysis.framework] ?? analysis.framework}</p>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 font-mono text-[11px] text-fg">
                 <span>Files</span><span className="text-right text-fg">{analysis.stats.filesParsed}</span>
                 <span>Imports</span><span className="text-right text-fg">{analysis.coverage.importsSeen}</span>
@@ -604,6 +591,19 @@ function DetailPane({
                 <span>Unclassified</span><span className="text-right text-fg">{unclassifiedCount}</span>
               </div>
             </section>
+            {analysis.routes.length > 0 && <section>
+              <SectionTitle>Routes · {analysis.routes.length}</SectionTitle>
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed border-collapse font-mono text-[10px]">
+                  <thead><tr className="border-b border-line text-left text-fg-muted"><th className="w-12 px-2 py-1">Method</th><th className="px-2 py-1">Pattern</th><th className="px-2 py-1">File</th></tr></thead>
+                  <tbody>{analysis.routes.map((route) => <tr key={`${route.file}:${route.method}:${route.path}`} className="border-b border-line/60 align-top">
+                    <td className="px-2 py-1 text-fg">{route.method}</td>
+                    <td className="break-all px-2 py-1 text-fg">{route.path}</td>
+                    <td className="px-2 py-1"><button type="button" title={route.file} onClick={() => onSelectFile(route.file)} className="block w-full cursor-pointer truncate text-left text-accent">{route.file}</button></td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+            </section>}
             <section>
               <SectionTitle>Most depended on · {mostDependedOn.length}</SectionTitle>
               {mostDependedOn.map((file) => (
@@ -778,7 +778,7 @@ function GraphCanvas({
 }
 
 function CanvasShellContent({ analysis, graph }: { analysis: ParserResult; graph: FoldedGraph }) {
-  const kinds = getExtensionCounts(analysis.files);
+  const kinds = countFrameworkRoles(analysis.framework, analysis.files);
   const filesNothingImports = useMemo(() => findFilesNothingImports(analysis.files, analysis.edges), [analysis.edges, analysis.files]);
   const importCycles = useMemo(() => findImportCycles(analysis.files, analysis.edges), [analysis.edges, analysis.files]);
   const highFanIn = useMemo(() => highFanInFiles(analysis.files), [analysis.files]);
