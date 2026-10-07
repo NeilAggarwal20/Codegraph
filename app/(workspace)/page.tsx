@@ -18,6 +18,7 @@ function formatTimestamp(iso: string | null): string {
   });
 }
 
+/** Renders the active organization's analyses, live stages, and repository submission form. */
 export default async function WorkspacePage() {
   const { orgId } = await auth();
 

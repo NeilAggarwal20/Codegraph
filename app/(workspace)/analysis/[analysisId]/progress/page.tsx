@@ -4,6 +4,7 @@ import { AnalysisProgress } from '@/components/analysis-progress';
 import { createClerkSupabaseClient } from '@/lib/supabase';
 import type { AnalysisStatus } from '@/lib/types';
 
+/** Loads an accessible analysis and its repository to initialize the live progress view. */
 export default async function AnalysisProgressPage({
   params,
 }: {

@@ -5,6 +5,10 @@ import { CanvasShell } from '@/components/canvas-shell';
 import { fetchStoredParserResult } from '@/lib/queries';
 import { createClerkSupabaseClient } from '@/lib/supabase';
 
+/**
+ * Renders the active organization's stored graph and import coverage.
+ * Returns not found for inaccessible analyses and redirects unfinished runs to progress.
+ */
 export default async function AnalysisMapPage({
   params,
 }: {

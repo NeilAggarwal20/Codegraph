@@ -54,6 +54,10 @@ interface StoredEdgeRow {
   kind: string;
 }
 
+/**
+ * Reconstructs and validates parser output from stored metadata, files, and dependency edges.
+ * Access is scoped by Supabase RLS; missing data, invalid output, or dangling edges cause errors.
+ */
 export async function fetchStoredParserResult(analysisId: string) {
   const supabase = await createClerkSupabaseClient();
   const [artifactResult, filesResult, edgesResult] = await Promise.all([

@@ -6,6 +6,7 @@ import type { AnalysisRow } from '@/lib/types';
 
 const staleAfterMilliseconds = 5 * 60 * 1000;
 
+/** Displays live analysis status, flagging active runs with no stage update for five minutes. */
 export function AnalysisStageIndicator({ analysis }: { analysis: AnalysisRow }) {
   const [clock, setClock] = useState(0);
   const active = analysis.status === 'pending' || analysis.status === 'parsing';

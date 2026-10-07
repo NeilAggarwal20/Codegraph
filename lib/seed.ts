@@ -1,6 +1,10 @@
 import { createClerkSupabaseClient } from './supabase';
 import { AnalysisRow } from './types';
 
+/**
+ * Upserts the supplied organization and fetches analyses visible through the active JWT's RLS scope.
+ * Logs database errors and returns an empty list when the analysis query fails.
+ */
 export async function fetchAnalysesForCurrentOrg(
   orgId: string,
   orgName: string

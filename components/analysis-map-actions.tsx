@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { prepareRepositoryAnalysisAction } from '@/app/actions';
 
+/** Renders dashboard navigation and a repository rerun action with pending and error feedback. */
 export function AnalysisMapActions({ repositoryUrl }: { repositoryUrl: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  /** Prepares an explicit rerun and opens its progress page, displaying preparation errors. */
   const rerun = () => {
     setError(null);
     startTransition(async () => {
