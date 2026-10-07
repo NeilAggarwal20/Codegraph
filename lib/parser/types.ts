@@ -1,4 +1,4 @@
-export type ImportKind = 'import' | 're-export' | 'dynamic-import';
+export type ImportKind = 'import' | 're-export' | 'dynamic-import' | 'require';
 
 export type ImportCoverageStatus = 'resolved' | 'external' | 'excluded' | 'unresolved';
 
@@ -9,6 +9,7 @@ export interface ParsedFile {
   kind: string;
   lines: number;
   sha256: string | null;
+  exports: string[];
   fanIn: number;
   fanOut: number;
 }

@@ -21,7 +21,7 @@ import {
 } from '@xyflow/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldRepository, type FoldedGraph } from '@/lib/graph/folded-graph';
-import { findFilesNothingImports, findImportCycles, walkGraph } from '@/lib/graph/analysis';
+import { walkGraph } from '@/lib/graph/analysis';
 import { countFrameworkRoles, frameworkNames } from '@/lib/framework/taxonomy';
 import type { WalkDirection } from '@/lib/graph/analysis';
 import type { DependencyEdge, ParsedFile, ParserResult } from '@/lib/parser/types';
@@ -429,15 +429,6 @@ function getKindCounts(files: ParsedFile[]): Array<{ kind: string; count: number
   return [...counts.entries()].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
 }
 
-function highFanInFiles(files: ParsedFile[]): ParsedFile[] {
-  if (files.length < 4) return [];
-  const values = files.map((file) => file.fanIn).sort((a, b) => a - b);
-  const percentile = (fraction: number) => values[Math.min(values.length - 1, Math.floor((values.length - 1) * fraction))];
-  const q3 = percentile(0.75);
-  const threshold = q3 + 1.5 * (q3 - percentile(0.25));
-  return files.filter((file) => file.fanIn > threshold).sort((a, b) => b.fanIn - a.fanIn || a.path.localeCompare(b.path));
-}
-
 function getRepositoryName(root: string): string {
   const segments = root.split(/[\\/]+/).filter(Boolean);
   const sourceFolders = new Set(['src', 'app', 'lib', 'frontend', 'backend']);
@@ -502,7 +493,6 @@ function DetailPane({
     .sort((a, b) => b.fanOut - a.fanOut || a.path.localeCompare(b.path));
   const routeCount = analysis.routes.length;
   const routeDisplay = routeCount === 0 ? '—' : routeCount;
-  const unclassifiedCount = analysis.files.filter((file) => file.kind === 'Modules' || file.kind === 'module').length;
   const folderKinds = selectedFolder ? getKindCounts(selectedFolder.files) : [];
   const [walkDirection, setWalkDirection] = useState<WalkDirection | null>(null);
   const walkEntries = selectedFile && walkDirection
@@ -535,10 +525,23 @@ function DetailPane({
           <div className="space-y-3">
             <header className="space-y-1 px-2">
               <h2 className="break-all font-mono text-[11px] font-semibold text-fg">{selectedFile.path}</h2>
-              <p className="font-mono text-[11px] text-fg">{selectedFile.kind} · {selectedFile.lines} lines</p>
+              <p className="font-mono text-[10px] text-fg-muted">{selectedFile.path.split('/').slice(0, -1).join('/') || '.'}</p>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 pt-2 font-mono text-[10px]">
+                <dt className="text-fg-muted">Kind</dt><dd className="text-fg">{selectedFile.path.match(/\.[^.]+$/)?.[0] ?? 'source'}</dd>
+                <dt className="text-fg-muted">Role</dt><dd className="text-fg">{selectedFile.kind}</dd>
+                <dt className="text-fg-muted">Length</dt><dd className="text-fg">{selectedFile.lines} lines</dd>
+                <dt className="text-fg-muted">Depends on</dt><dd className="text-fg">{importPaths.length} files</dd>
+                <dt className="text-fg-muted">Depended on by</dt><dd className="text-fg">{dependentPaths.length} files</dd>
+                <dt className="text-fg-muted">Reached by</dt><dd className="text-fg">imports only</dd>
+                {selectedFile.exports.length > 0 && <><dt className="text-fg-muted">Exports</dt><dd className="truncate text-fg">{selectedFile.exports.join(', ')}</dd></>}
+              </dl>
             </header>
             <RelationshipList title="Imports" paths={importPaths} count={importPaths.length} onSelect={onSelectFile} />
             <RelationshipList title="Imported by" paths={dependentPaths} count={dependentPaths.length} onSelect={onSelectFile} />
+            {selectedFile.exports.length > 0 && <section>
+              <SectionTitle>CommonJS exports · {selectedFile.exports.length}</SectionTitle>
+              {selectedFile.exports.map((name) => <p key={name} className="break-all px-2 py-1 font-mono text-[10px] text-fg">{name}</p>)}
+            </section>}
             <section>
               <SectionTitle>Impact · two levels</SectionTitle>
               <div className="flex gap-1 p-2">
@@ -584,11 +587,10 @@ function DetailPane({
             <section className="space-y-1 px-2">
               <h2 className="font-mono text-[14px] font-semibold text-fg">{getRepositoryName(analysis.root)}</h2>
               <p className="font-mono text-[11px] text-fg">Framework · {frameworkNames[analysis.framework] ?? analysis.framework}</p>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 font-mono text-[11px] text-fg">
-                <span>Files</span><span className="text-right text-fg">{analysis.stats.filesParsed}</span>
-                <span>Imports</span><span className="text-right text-fg">{analysis.coverage.importsSeen}</span>
-                <span>Routes</span><span className="text-right text-fg">{routeDisplay}</span>
-                <span>Unclassified</span><span className="text-right text-fg">{unclassifiedCount}</span>
+              <div className="grid grid-cols-3 border-y border-line pt-2 font-mono text-[10px] text-fg">
+                <div className="border-r border-line px-2 pb-2"><span className="block text-fg-muted">Files</span><span className="text-base">{analysis.stats.filesParsed}</span></div>
+                <div className="border-r border-line px-2 pb-2"><span className="block text-fg-muted">Imports</span><span className="text-base">{analysis.edges.length}</span></div>
+                <div className="px-2 pb-2"><span className="block text-fg-muted">Routes</span><span className="text-base">{routeDisplay}</span></div>
               </div>
             </section>
             {analysis.routes.length > 0 && <section>
@@ -605,17 +607,13 @@ function DetailPane({
               </div>
             </section>}
             <section>
-              <SectionTitle>Most depended on · {mostDependedOn.length}</SectionTitle>
-              {mostDependedOn.map((file) => (
-                <PathButton key={file.path} path={file.path} onSelect={onSelectFile} />
-              ))}
+              <SectionTitle>Most depended on · files importing it · {mostDependedOn.length}</SectionTitle>
+              {mostDependedOn.map((file) => <div key={file.path} className="flex items-center gap-2"><div className="min-w-0 flex-1"><PathButton path={file.path} onSelect={onSelectFile} /></div><span className="shrink-0 px-2 font-mono text-[10px] text-incoming">←{file.fanIn}</span></div>)}
               {mostDependedOn.length === 0 && <p className="px-2 py-1 font-mono text-[10px] text-fg-muted">No incoming imports.</p>}
             </section>
             <section>
               <SectionTitle>Nothing imports · {filesNothingImports.length}</SectionTitle>
-              {filesNothingImports.map((file) => (
-                <PathButton key={file.path} path={file.path} onSelect={onSelectFile} />
-              ))}
+              {filesNothingImports.map((file) => <div key={file.path} className="flex items-center gap-2"><div className="min-w-0 flex-1"><PathButton path={file.path} onSelect={onSelectFile} /></div><span className="shrink-0 px-2 font-mono text-[10px] text-outgoing">{file.fanOut} →</span></div>)}
             </section>
           </div>
         )}
@@ -779,20 +777,17 @@ function GraphCanvas({
 
 function CanvasShellContent({ analysis, graph }: { analysis: ParserResult; graph: FoldedGraph }) {
   const kinds = countFrameworkRoles(analysis.framework, analysis.files);
-  const filesNothingImports = useMemo(() => findFilesNothingImports(analysis.files, analysis.edges), [analysis.edges, analysis.files]);
-  const importCycles = useMemo(() => findImportCycles(analysis.files, analysis.edges), [analysis.edges, analysis.files]);
-  const highFanIn = useMemo(() => highFanInFiles(analysis.files), [analysis.files]);
-  const longFiles = useMemo(() => analysis.files.filter((file) => file.lines >= 500).sort((a, b) => b.lines - a.lines || a.path.localeCompare(b.path)), [analysis.files]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [focus, setFocus] = useState<GraphFocus | null>(null);
   const [selectedTab, setSelectedTab] = useState<'structure' | 'explanation'>('structure');
+  const [viewTab, setViewTab] = useState<'map' | 'routes'>('map');
   const fileSelectorRef = useRef<(path: string) => void>(() => undefined);
   const registerFileSelector = useCallback((selector: ((path: string) => void) | null) => {
     if (selector) fileSelectorRef.current = selector;
     else fileSelectorRef.current = () => undefined;
   }, []);
   return (
-    <div className="grid h-full min-h-0 grid-cols-[13rem_minmax(0,1fr)_18rem] overflow-hidden bg-canvas text-fg">
+    <div className="grid h-full min-h-0 grid-cols-[14rem_minmax(0,1fr)_26rem] overflow-hidden bg-canvas text-fg">
       <aside aria-label="File categories" className="flex min-h-0 flex-col border-r border-line bg-surface">
         <div className="flex h-9 shrink-0 items-center border-b border-line px-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
           Categories · {analysis.files.length} files
@@ -807,37 +802,24 @@ function CanvasShellContent({ analysis, graph }: { analysis: ParserResult; graph
           ))}
         </div>
         {selectedCategory && <button type="button" onClick={() => setSelectedCategory(null)} className="px-4 pb-2 text-left font-mono text-[10px] text-accent">Clear category filter</button>}
-        <details className="min-h-0 overflow-y-auto border-t border-line">
-          <summary className="cursor-pointer px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-fg">Insights</summary>
-          <div className="space-y-3 px-2 pb-3">
-            <section>
-              <SectionTitle>Files nothing imports · {filesNothingImports.length}</SectionTitle>
-              <p className="px-2 py-1 font-mono text-[9px] leading-4 text-fg-muted">No parsed file imports this file; framework entry points may not appear in import edges.</p>
-              {filesNothingImports.map((file) => <PathButton key={file.path} path={file.path} onSelect={(path) => fileSelectorRef.current(path)} />)}
-            </section>
-            <section>
-              <SectionTitle>Import cycles · {importCycles.length}</SectionTitle>
-              {importCycles.map((cycle) => <div key={cycle[0]} className="border-b border-line/70 px-2 py-1"><p className="mb-1 font-mono text-[9px] text-fg-muted">These files form an import cycle.</p>{cycle.map((path) => <PathButton key={path} path={path} onSelect={(value) => fileSelectorRef.current(value)} />)}</div>)}
-            </section>
-            <section>
-              <SectionTitle>High fan-in · {highFanIn.length}</SectionTitle>
-              {highFanIn.map((file) => <PathButton key={file.path} path={`${file.path} · ${file.fanIn}`} onSelect={() => fileSelectorRef.current(file.path)} />)}
-            </section>
-            <section>
-              <SectionTitle>Long files · {longFiles.length}</SectionTitle>
-              {longFiles.map((file) => <PathButton key={file.path} path={`${file.path} · ${file.lines} lines`} onSelect={() => fileSelectorRef.current(file.path)} />)}
-            </section>
-          </div>
-        </details>
+        <div className="min-h-0 flex-1" />
       </aside>
 
       <main aria-label="Dependency map" className="flex min-h-0 min-w-0 flex-col bg-canvas">
-        <div className="flex h-9 shrink-0 items-center justify-between border-b border-line px-3 font-mono text-[10px] uppercase tracking-wider text-fg-muted">
-          <span>Map</span>
+        <div className="flex h-9 shrink-0 items-center border-b border-line px-3 font-mono text-[11px]">
+          {(['map', 'routes'] as const).map((tab) => <button key={tab} type="button" onClick={() => setViewTab(tab)} className={`mr-4 h-full cursor-pointer border-b px-1 capitalize ${viewTab === tab ? 'border-accent text-fg' : 'border-transparent text-fg-muted'}`}>{tab === 'map' ? 'Map' : `Routes ${analysis.routes.length}`}</button>)}
           <span>{analysis.stats.filesParsed} files · {graph.nodes.length} modules · {graph.edges.length} connections</span>
         </div>
         <div className="min-h-0 min-w-0 flex-1">
-          {graph.nodes.length > 0 ? (
+          {viewTab === 'routes' ? (
+            <div className="h-full overflow-auto">
+              <table className="w-full border-collapse font-mono text-xs">
+                <thead className="sticky top-0 bg-surface text-left text-fg-muted"><tr><th className="border-b border-line px-3 py-2">Method</th><th className="border-b border-line px-3 py-2">Pattern</th><th className="border-b border-line px-3 py-2">File</th></tr></thead>
+                <tbody>{analysis.routes.map((route) => <tr key={`${route.file}:${route.method}:${route.path}`} className="border-b border-line/60"><td className="px-3 py-2">{route.method}</td><td className="px-3 py-2">{route.path}</td><td className="px-3 py-2"><button type="button" title={route.file} onClick={() => fileSelectorRef.current(route.file)} className="max-w-full cursor-pointer truncate text-accent">{route.file}</button></td></tr>)}</tbody>
+              </table>
+              {analysis.routes.length === 0 && <p className="p-4 font-mono text-xs text-fg-muted">No routes were extracted.</p>}
+            </div>
+          ) : graph.nodes.length > 0 ? (
             <ReactFlowProvider>
               <GraphCanvas
                 analysis={analysis}

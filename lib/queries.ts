@@ -44,6 +44,7 @@ interface StoredFileRow {
   module_name: string;
   kind: string;
   sha256: string | null;
+  exports: string[];
   fan_in: number;
   fan_out: number;
 }
@@ -70,7 +71,7 @@ export async function fetchStoredParserResult(analysisId: string) {
       .single(),
     supabase
       .from('files')
-      .select('id, path, lines, folder, module_name, kind, sha256, fan_in, fan_out')
+      .select('id, path, lines, folder, module_name, kind, sha256, exports, fan_in, fan_out')
       .eq('analysis_id', analysisId),
     supabase
       .from('edges')
@@ -85,7 +86,19 @@ export async function fetchStoredParserResult(analysisId: string) {
   if (artifactResult.error || !artifactResult.data) {
     throw new Error('Could not load the stored analysis metadata.', { cause: artifactResult.error });
   }
-  if (filesResult.error) throw new Error('Could not load the stored repository files.', { cause: filesResult.error });
+if (filesResult.error) {
+  throw new Error(
+    `Could not load the stored repository files. ${
+      filesResult.error.code ?? ''
+    } | ${
+      filesResult.error.message ?? ''
+    } | ${
+      filesResult.error.details ?? ''
+    } | ${
+      filesResult.error.hint ?? ''
+    }`
+  );
+}
   if (edgesResult.error) throw new Error('Could not load the stored dependency edges.', { cause: edgesResult.error });
   if (routesResult.error) throw new Error('Could not load the extracted repository routes.', { cause: routesResult.error });
 
@@ -117,6 +130,7 @@ export async function fetchStoredParserResult(analysisId: string) {
       module: file.module_name,
       kind: file.kind,
       sha256: file.sha256,
+      exports: file.exports,
       fanIn: file.fan_in,
       fanOut: file.fan_out,
     })),

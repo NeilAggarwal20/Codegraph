@@ -22,19 +22,20 @@ export function readParserResult(value: unknown): ParserResult {
   for (const file of value.files) {
     if (!isRecord(file) || ['path', 'folder', 'module', 'kind'].some((key) => typeof file[key] !== 'string') ||
         (typeof file.sha256 !== 'string' && file.sha256 !== null) ||
+        (file.exports !== undefined && (!Array.isArray(file.exports) || file.exports.some((name) => typeof name !== 'string'))) ||
         ['lines', 'fanIn', 'fanOut'].some((key) => typeof file[key] !== 'number')) {
       throw new Error('Invalid file record.');
     }
   }
   for (const edge of value.edges) {
     if (!isRecord(edge) || typeof edge.from !== 'string' || typeof edge.to !== 'string' ||
-        !['import', 're-export', 'dynamic-import'].includes(String(edge.kind))) {
+        !['import', 're-export', 'dynamic-import', 'require'].includes(String(edge.kind))) {
       throw new Error('Invalid dependency edge.');
     }
   }
   for (const record of value.coverage.records) {
     if (!isRecord(record) || typeof record.from !== 'string' || typeof record.specifier !== 'string' ||
-        !['import', 're-export', 'dynamic-import'].includes(String(record.kind)) ||
+        !['import', 're-export', 'dynamic-import', 'require'].includes(String(record.kind)) ||
         !['resolved', 'external', 'excluded', 'unresolved'].includes(String(record.status))) {
       throw new Error('Invalid import coverage record.');
     }
@@ -51,6 +52,7 @@ export function readParserResult(value: unknown): ParserResult {
       typeof route.method !== 'string' || typeof route.path !== 'string' || typeof route.file !== 'string')) {
     throw new Error('Invalid extracted routes.');
   }
-  return { ...value, framework, routes } as unknown as ParserResult;
+  const files = value.files.map((file) => ({ ...file, exports: file.exports ?? [] }));
+  return { ...value, framework, routes, files } as unknown as ParserResult;
 }
 

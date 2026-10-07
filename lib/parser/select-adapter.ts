@@ -4,9 +4,10 @@ import type { AdapterContext, FrameworkAdapter } from './types.ts';
 import { fallbackAdapter } from './fallback-adapter.ts';
 import { nextAdapter } from './adapters/next.ts';
 import { nestAdapter } from './adapters/nest.ts';
+import { expressAdapter } from './adapters/express.ts';
 import { reactAdapter } from './adapters/react.ts';
 
-const adapters: readonly FrameworkAdapter[] = [nextAdapter, nestAdapter, reactAdapter];
+const adapters: readonly FrameworkAdapter[] = [nextAdapter, nestAdapter, expressAdapter, reactAdapter];
 
 export async function selectFrameworkAdapter(root: string, relativePaths: readonly string[]): Promise<FrameworkAdapter> {
   let packageJson: unknown = null;
