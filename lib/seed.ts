@@ -1,6 +1,10 @@
 import { createClerkSupabaseClient } from './supabase';
 import { AnalysisRow } from './types';
 
+/**
+ * Upserts the supplied organization and fetches analyses visible through the active JWT's RLS scope.
+ * Logs database errors and returns an empty list when the analysis query fails.
+ */
 export async function fetchAnalysesForCurrentOrg(
   orgId: string,
   orgName: string
@@ -19,7 +23,7 @@ export async function fetchAnalysesForCurrentOrg(
   const { data: analyses, error } = await supabase
     .from('analyses')
     .select(
-      'id, project_id, org_id, commit_sha, status, error_message, parsed_files_count, created_at, completed_at, projects(id, name, repo_url)'
+      'id, project_id, org_id, commit_sha, status, stage, stage_message, updated_at, error_message, parsed_files_count, created_at, completed_at, projects(id, name, repo_url)'
     )
     .order('created_at', { ascending: false });
 

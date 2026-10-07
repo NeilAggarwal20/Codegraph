@@ -4,8 +4,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { ThemeControl } from "@/components/theme-control";
+import { AnalysisRealtimeProvider } from "@/components/analysis-realtime-provider";
 import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 
+/** Requires an active organization and provides the workspace theme, header, and Realtime client. */
 export default async function WorkspaceLayout({
   children,
 }: {
@@ -50,7 +52,7 @@ export default async function WorkspaceLayout({
       </header>
 
       <main className="m-0 min-h-0 flex-1 p-0">
-        {children}
+        <AnalysisRealtimeProvider key={orgId}>{children}</AnalysisRealtimeProvider>
       </main>
     </div>
   );
