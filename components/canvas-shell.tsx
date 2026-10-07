@@ -20,6 +20,8 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ExplanationText } from './explanation-text';
+import { ReanalyseButton } from './analysis-map-actions';
 import { foldRepository, type FoldedGraph } from '@/lib/graph/folded-graph';
 import { walkGraph } from '@/lib/graph/analysis';
 import { countFrameworkRoles, frameworkNames } from '@/lib/framework/taxonomy';
@@ -459,18 +461,26 @@ function PathButton({
 function DetailPane({
   analysis,
   graph,
+  analysisId,
+  repositoryUrl,
+  tracingConfigured,
+  onRoleAssigned,
   focus,
   selectedTab,
   onTabChange,
-  onSelectFile,
+  onSelectPath,
   onClear,
 }: {
   analysis: ParserResult;
   graph: FoldedGraph;
+  analysisId?: string;
+  repositoryUrl?: string;
+  tracingConfigured?: boolean;
+  onRoleAssigned: (path: string, role: string) => void;
   focus: GraphFocus | null;
   selectedTab: 'structure' | 'explanation';
   onTabChange: (tab: 'structure' | 'explanation') => void;
-  onSelectFile: (path: string) => void;
+  onSelectPath: (path: string) => void;
   onClear: () => void;
 }) {
   const selectedFile = focus?.filePath
@@ -479,6 +489,7 @@ function DetailPane({
   const selectedFolder = focus && !focus.filePath
     ? graph.nodes.find((node) => node.id === focus.nodeId) ?? null
     : null;
+  const onSelectFile = onSelectPath;
   const importPaths = selectedFile
     ? [...new Set(analysis.edges.filter((edge) => edge.from === selectedFile.path).map((edge) => edge.to))].sort()
     : [];
@@ -499,6 +510,58 @@ function DetailPane({
     ? walkGraph(analysis.files, analysis.edges, selectedFile.path, walkDirection, 2)
     : [];
   const walkTitle = walkDirection === 'dependents' ? 'Blast radius' : 'Dependency chain';
+  const selectedSubject = selectedFile
+    ? { subjectType: 'file' as const, subjectPath: selectedFile.path, filePaths: [selectedFile.path] }
+    : selectedFolder
+      ? { subjectType: 'folder' as const, subjectPath: selectedFolder.id, filePaths: selectedFolder.files.map((file) => file.path) }
+      : null;
+  const explanationKey = selectedSubject ? `${selectedSubject.subjectType}:${selectedSubject.subjectPath}` : null;
+  const [explanations, setExplanations] = useState<Record<string, { status: 'ready' | 'stale'; explanation?: string; role?: string | null; message?: string }>>({});
+  const [explanationErrors, setExplanationErrors] = useState<Record<string, string>>({});
+  const [pendingExplanation, setPendingExplanation] = useState<string | null>(null);
+  const currentExplanation = explanationKey ? explanations[explanationKey] : undefined;
+  const currentExplanationError = explanationKey ? explanationErrors[explanationKey] : undefined;
+
+  const requestExplanation = async () => {
+    const subject = selectedSubject;
+    const key = explanationKey;
+    if (!subject || !key) return;
+    onTabChange('explanation');
+    if (explanations[key]?.status || pendingExplanation === key) return;
+    if (!analysisId || !repositoryUrl) {
+      setExplanationErrors((current) => ({ ...current, [key]: 'Explanations are unavailable in the preview.' }));
+      return;
+    }
+    setExplanationErrors((current) => ({ ...current, [key]: '' }));
+    setPendingExplanation(key);
+    try {
+      const response = await fetch(`/api/analysis/${encodeURIComponent(analysisId)}/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subject),
+      });
+      const result = await response.json() as {
+        status?: 'ready' | 'stale';
+        explanation?: string;
+        role?: string | null;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(result.error ?? 'Could not explain this item.');
+      if (result.status === 'stale') {
+        setExplanations((current) => ({ ...current, [key]: { status: 'stale', message: result.message ?? 'This explanation is stale.' } }));
+      } else if (result.status === 'ready' && result.explanation) {
+        setExplanations((current) => ({ ...current, [key]: { status: 'ready', explanation: result.explanation, role: result.role } }));
+        if (selectedFile && result.role) onRoleAssigned(selectedFile.path, result.role);
+      } else {
+        throw new Error('The explanation service returned an invalid response.');
+      }
+    } catch (error) {
+      setExplanationErrors((current) => ({ ...current, [key]: error instanceof Error ? error.message : 'Could not explain this item.' }));
+    } finally {
+      setPendingExplanation(null);
+    }
+  };
 
   return (
     <aside aria-label="Details" className="flex min-h-0 flex-col border-l border-line bg-surface">
@@ -520,7 +583,26 @@ function DetailPane({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {selectedTab === 'explanation' ? (
-          <p className="px-2 py-4 font-mono text-[10px] leading-5 text-fg-muted">No explanation yet. Explanations will appear here when available.</p>
+          <div className="space-y-3 px-2 py-2 font-mono text-[10px] leading-5">
+            {tracingConfigured ? (
+              <p className="text-fg-muted">LangSmith tracing is on.</p>
+            ) : (
+              <p className="text-fg-muted">LangSmith tracing is off. Set LANGSMITH_TRACING=true and LANGSMITH_API_KEY to record runs.</p>
+            )}
+            {!selectedSubject ? (
+              <p className="text-fg-muted">Select a file or folded folder, then click Explain.</p>
+            ) : currentExplanation?.status === 'ready' ? (
+              <ExplanationText content={currentExplanation.explanation ?? ''} filePaths={[...analysis.files.map((file) => file.path), ...graph.nodes.map((node) => node.id)]} onSelectPath={onSelectPath} />
+            ) : currentExplanation?.status === 'stale' ? (
+              <div className="space-y-3"><p className="text-amber-700 dark:text-amber-400">{currentExplanation.message}</p>{repositoryUrl && <ReanalyseButton repositoryUrl={repositoryUrl} />}</div>
+            ) : pendingExplanation === explanationKey ? (
+              <p className="text-fg-muted">Explaining {selectedSubject.subjectType}…</p>
+            ) : currentExplanationError ? (
+              <div className="space-y-2"><p role="alert" className="text-rose-700 dark:text-rose-400">{currentExplanationError}</p><button type="button" onClick={requestExplanation} className="cursor-pointer text-accent underline underline-offset-2">Try again</button></div>
+            ) : (
+              <div className="space-y-2"><p className="text-fg-muted">No explanation has been requested for this item yet.</p><button type="button" onClick={requestExplanation} className="cursor-pointer rounded border border-line px-2 py-1 text-fg">Explain</button></div>
+            )}
+          </div>
         ) : selectedFile ? (
           <div className="space-y-3">
             <header className="space-y-1 px-2">
@@ -536,6 +618,7 @@ function DetailPane({
                 {selectedFile.exports.length > 0 && <><dt className="text-fg-muted">Exports</dt><dd className="truncate text-fg">{selectedFile.exports.join(', ')}</dd></>}
               </dl>
             </header>
+            <button type="button" onClick={requestExplanation} className="mx-2 cursor-pointer rounded border border-line px-2 py-1 font-mono text-[10px] text-fg">Explain</button>
             <RelationshipList title="Imports" paths={importPaths} count={importPaths.length} onSelect={onSelectFile} />
             <RelationshipList title="Imported by" paths={dependentPaths} count={dependentPaths.length} onSelect={onSelectFile} />
             {selectedFile.exports.length > 0 && <section>
@@ -567,6 +650,7 @@ function DetailPane({
               <h2 className="break-all font-mono text-[11px] font-semibold text-fg">{selectedFolder.label}</h2>
               <p className="font-mono text-[11px] text-fg">{selectedFolder.files.length} files · ↓ {selectedFolder.fanIn} · ↑ {selectedFolder.fanOut}</p>
             </header>
+            <button type="button" onClick={requestExplanation} className="mx-2 cursor-pointer rounded border border-line px-2 py-1 font-mono text-[10px] text-fg">Explain</button>
             <section>
               <SectionTitle>File kinds</SectionTitle>
               {folderKinds.map(({ kind, count }) => (
@@ -775,7 +859,21 @@ function GraphCanvas({
   );
 }
 
-function CanvasShellContent({ analysis, graph }: { analysis: ParserResult; graph: FoldedGraph }) {
+function CanvasShellContent({
+  analysis,
+  graph,
+  analysisId,
+  repositoryUrl,
+  tracingConfigured,
+  onRoleAssigned,
+}: {
+  analysis: ParserResult;
+  graph: FoldedGraph;
+  analysisId?: string;
+  repositoryUrl?: string;
+  tracingConfigured?: boolean;
+  onRoleAssigned: (path: string, role: string) => void;
+}) {
   const kinds = countFrameworkRoles(analysis.framework, analysis.files);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [focus, setFocus] = useState<GraphFocus | null>(null);
@@ -839,18 +937,51 @@ function CanvasShellContent({ analysis, graph }: { analysis: ParserResult; graph
       <DetailPane
         analysis={analysis}
         graph={graph}
+        analysisId={analysisId}
+        repositoryUrl={repositoryUrl}
+        tracingConfigured={tracingConfigured}
+        onRoleAssigned={onRoleAssigned}
         focus={focus}
         selectedTab={selectedTab}
         onTabChange={setSelectedTab}
-        onSelectFile={(path) => fileSelectorRef.current(path)}
+        onSelectPath={(path) => {
+          if (graph.fileOwners.has(path)) fileSelectorRef.current(path);
+          else if (graph.nodes.some((node) => node.id === path)) setFocus({ nodeId: path });
+        }}
         onClear={() => setFocus(null)}
       />
     </div>
   );
 }
 
-export function CanvasShell({ analysis }: { analysis: ParserResult }) {
-  const graph = useMemo(() => foldRepository(analysis), [analysis]);
-  return <CanvasShellContent analysis={analysis} graph={graph} />;
+export function CanvasShell({
+  analysis,
+  analysisId,
+  repositoryUrl,
+  tracingConfigured,
+}: {
+  analysis: ParserResult;
+  analysisId?: string;
+  repositoryUrl?: string;
+  tracingConfigured?: boolean;
+}) {
+  const [currentAnalysis, setCurrentAnalysis] = useState(analysis);
+  const graph = useMemo(() => foldRepository(currentAnalysis), [currentAnalysis]);
+  const onRoleAssigned = useCallback((path: string, role: string) => {
+    setCurrentAnalysis((current) => ({
+      ...current,
+      files: current.files.map((file) => file.path === path ? { ...file, kind: role } : file),
+    }));
+  }, []);
+  return (
+    <CanvasShellContent
+      analysis={currentAnalysis}
+      graph={graph}
+      analysisId={analysisId}
+      repositoryUrl={repositoryUrl}
+      tracingConfigured={tracingConfigured}
+      onRoleAssigned={onRoleAssigned}
+    />
+  );
 }
 

@@ -4,6 +4,7 @@ import { AnalysisMapActions } from '@/components/analysis-map-actions';
 import { CanvasShell } from '@/components/canvas-shell';
 import { fetchStoredParserResult } from '@/lib/queries';
 import { createClerkSupabaseClient } from '@/lib/supabase';
+import { isLangSmithTracingConfigured } from '@/lib/ai/client';
 
 export default async function AnalysisMapPage({
   params,
@@ -50,7 +51,12 @@ export default async function AnalysisMapPage({
         <AnalysisMapActions repositoryUrl={project.repo_url} />
       </header>
       <div className="min-h-0 flex-1">
-        <CanvasShell analysis={result} />
+        <CanvasShell
+          analysis={result}
+          analysisId={analysisId}
+          repositoryUrl={project.repo_url}
+          tracingConfigured={isLangSmithTracingConfigured()}
+        />
       </div>
     </div>
   );
