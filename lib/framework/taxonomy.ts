@@ -1,10 +1,11 @@
 import type { ParsedFile } from '@/lib/parser/types';
 
-type FrameworkName = 'Next.js' | 'NestJS' | 'React' | 'Generic';
+type FrameworkName = 'Next.js' | 'NestJS' | 'Express' | 'React' | 'Generic';
 
 export const frameworkNames: Record<string, string> = {
   'Next.js': 'Next.js',
   NestJS: 'NestJS',
+  Express: 'Express',
   React: 'React',
   Generic: 'Not detected',
 };
@@ -12,6 +13,7 @@ export const frameworkNames: Record<string, string> = {
 const roleOrder: Record<FrameworkName, readonly string[]> = {
   'Next.js': ['Page routes', 'API endpoints', 'Server actions', 'Components', 'Layouts', 'Middleware', 'Modules'],
   NestJS: ['Controllers', 'Services', 'Modules', 'Entities', 'Guards', 'Interceptors', 'Pipes', 'Decorators'],
+  Express: ['Routers', 'Controllers', 'Services', 'Models', 'Middleware', 'Config files', 'Tests', 'Unclassified'],
   React: ['Components', 'Hooks', 'Modules'],
   Generic: ['Modules'],
 };

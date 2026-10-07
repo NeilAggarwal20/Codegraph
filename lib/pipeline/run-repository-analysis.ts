@@ -47,6 +47,7 @@ function makeStorageArtifact(result: ParserResult) {
       module: file.module,
       kind: file.kind,
       sha256: file.sha256,
+      exports: file.exports,
       fan_in: file.fanIn,
       fan_out: file.fanOut,
     })),

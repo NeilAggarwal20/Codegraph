@@ -31,10 +31,11 @@ export default async function AnalysisMapPage({
   if (projectError || !project) notFound();
 
   const result = await fetchStoredParserResult(analysisId);
-  const coveragePercent = result.coverage.importsSeen === 0
+  const graphImports = result.coverage.resolved + result.coverage.unresolved;
+  const coveragePercent = graphImports === 0
     ? 100
-    : Math.round((result.coverage.resolved / result.coverage.importsSeen) * 100);
-  const partial = coveragePercent < 95;
+    : Math.round((result.coverage.resolved / graphImports) * 100);
+  const partial = result.coverage.unresolved > 0 || result.stats.filesSkipped > 0;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-canvas">
@@ -43,7 +44,7 @@ export default async function AnalysisMapPage({
           <span className="font-semibold">{project.name}</span>
           {analysis.commit_sha && <span className="ml-3 text-fg-muted">{analysis.commit_sha.slice(0, 12)}</span>}
           <span className={`ml-3 ${partial ? 'text-amber-700 dark:text-amber-400' : 'text-fg-muted'}`}>
-            {partial ? 'Partial graph' : 'Import coverage'} · {coveragePercent}% ({result.coverage.resolved}/{result.coverage.importsSeen} resolved)
+            {partial ? 'Partial graph' : 'Full graph'} · {coveragePercent}% ({result.coverage.resolved}/{graphImports} local imports resolved)
           </span>
         </div>
         <AnalysisMapActions repositoryUrl={project.repo_url} />

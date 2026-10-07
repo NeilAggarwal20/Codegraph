@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { Project, SyntaxKind, ts } from 'ts-morph';
+import { Node, Project, SyntaxKind, ts } from 'ts-morph';
 import { selectFrameworkAdapter } from './select-adapter.ts';
 import type {
   DependencyEdge,
@@ -66,13 +66,71 @@ function getImports(sourceFile: import('ts-morph').SourceFile): ImportOccurrence
     const specifier = declaration.getModuleSpecifierValue();
     if (specifier !== undefined) occurrences.push({ specifier, kind: 're-export', node: declaration });
   }
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.ImportEqualsDeclaration)) {
+    const reference = declaration.getModuleReference();
+    if (!Node.isExternalModuleReference(reference)) continue;
+    const expression = reference?.getExpression();
+    if (expression && Node.isStringLiteral(expression)) {
+      occurrences.push({ specifier: expression.getLiteralValue(), kind: 'require', node: declaration });
+    }
+  }
   sourceFile.forEachDescendant((node) => {
-    if (!node.isKind(SyntaxKind.CallExpression) || node.getExpression().getKind() !== SyntaxKind.ImportKeyword) return;
+    if (!node.isKind(SyntaxKind.CallExpression)) return;
     const argument = node.getArguments()[0];
     if (!argument || (!argument.isKind(SyntaxKind.StringLiteral) && !argument.isKind(SyntaxKind.NoSubstitutionTemplateLiteral))) return;
-    occurrences.push({ specifier: argument.getLiteralValue(), kind: 'dynamic-import', node });
+    const expression = node.getExpression();
+    if (expression.getKind() === SyntaxKind.ImportKeyword) {
+      occurrences.push({ specifier: argument.getLiteralValue(), kind: 'dynamic-import', node });
+    } else if (Node.isIdentifier(expression) && expression.getText() === 'require') {
+      occurrences.push({ specifier: argument.getLiteralValue(), kind: 'require', node });
+    }
   });
   return occurrences;
+}
+
+function propertyPath(node: import('ts-morph').Expression): string[] | null {
+  if (Node.isIdentifier(node)) return [node.getText()];
+  if (Node.isPropertyAccessExpression(node)) {
+    const parent = propertyPath(node.getExpression());
+    return parent ? [...parent, node.getName()] : null;
+  }
+  if (Node.isElementAccessExpression(node)) {
+    const argument = node.getArgumentExpression();
+    if (!argument || (!Node.isStringLiteral(argument) && !Node.isNoSubstitutionTemplateLiteral(argument))) return null;
+    const parent = propertyPath(node.getExpression());
+    return parent ? [...parent, argument.getLiteralValue()] : null;
+  }
+  return null;
+}
+
+function objectExportNames(expression: import('ts-morph').Expression): string[] {
+  if (!Node.isObjectLiteralExpression(expression)) return [];
+  const names = new Set<string>();
+  for (const property of expression.getProperties()) {
+    if (Node.isPropertyAssignment(property) || Node.isShorthandPropertyAssignment(property) || Node.isMethodDeclaration(property)) {
+      const name = property.getNameNode();
+      if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNoSubstitutionTemplateLiteral(name) || Node.isNumericLiteral(name)) {
+        names.add(Node.isIdentifier(name) ? name.getText() : name.getLiteralText());
+      }
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+function getCommonJsExports(sourceFile: import('ts-morph').SourceFile): string[] {
+  const names = new Set<string>();
+  for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (node.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+    const left = node.getLeft();
+    const path = propertyPath(left);
+    if (!path) continue;
+    if (path.length === 2 && path[0] === 'exports') names.add(path[1]);
+    if (path.length === 3 && path[0] === 'module' && path[1] === 'exports') names.add(path[2]);
+    if (path.length === 2 && path[0] === 'module' && path[1] === 'exports') {
+      for (const name of objectExportNames(node.getRight())) names.add(name);
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 function classifyResolution(
@@ -95,9 +153,31 @@ function classifyResolution(
       return { status: 'excluded', resolvedAbsolute: localAsset, reason: 'Local import is not a supported source module.' };
     }
   }
-  const resolution = ts.resolveModuleName(specifier, fromAbsolute, compilerOptions, ts.sys).resolvedModule;
+  // Repositories without a tsconfig are common in JavaScript projects. Use
+  // Node's extension and directory-index rules for those projects so that
+  // require('./routes') resolves routes/index.js and package entry points.
+  const resolutionOptions: ts.CompilerOptions = {
+    ...compilerOptions,
+    ...(compilerOptions.moduleResolution === undefined
+      ? { moduleResolution: ts.ModuleResolutionKind.Node10 }
+      : {}),
+    ...(compilerOptions.allowJs === undefined ? { allowJs: true } : {}),
+  };
+  const resolution = ts.resolveModuleName(specifier, fromAbsolute, resolutionOptions, ts.sys).resolvedModule;
   if (!resolution) {
     if (!specifier.startsWith('.') && !path.isAbsolute(specifier)) {
+      const aliases = compilerOptions.paths ?? {};
+      const isConfiguredAlias = Object.keys(aliases).some((pattern) => {
+        const wildcard = pattern.indexOf('*');
+        if (wildcard < 0) return specifier === pattern;
+        const prefix = pattern.slice(0, wildcard);
+        const suffix = pattern.slice(wildcard + 1);
+        return specifier.startsWith(prefix) && specifier.endsWith(suffix)
+          && specifier.length >= prefix.length + suffix.length;
+      });
+      if (isConfiguredAlias) {
+        return { status: 'unresolved', reason: 'Configured local path alias did not resolve to a parsed source file.' };
+      }
       return { status: 'external', reason: 'Bare module specifier is outside the repository.' };
     }
     return { status: 'unresolved', reason: 'No matching file was found by TypeScript module resolution.' };
@@ -158,6 +238,7 @@ export async function parseRepository(
         kind: identity.kind,
         lines: contents.length === 0 ? 0 : contents.split(/\r\n|\n|\r/).length,
         sha256: createHash('sha256').update(contents).digest('hex'),
+        exports: getCommonJsExports(sourceFile),
         fanIn: 0,
         fanOut: 0,
       });
