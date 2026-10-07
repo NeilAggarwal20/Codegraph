@@ -9,6 +9,10 @@ import type { AnalysisStatus } from '@/lib/types';
 
 const staleAfterMilliseconds = 5 * 60 * 1000;
 
+/**
+ * Shows live analysis stages, connection errors, and runs stale for five minutes.
+ * Starts pending work after subscribing and opens the map when the run completes.
+ */
 export function AnalysisProgress({
   analysisId,
   repositoryName,
@@ -67,6 +71,7 @@ export function AnalysisProgress({
   const isStale = (view.status === 'pending' || view.status === 'parsing') &&
     clock - view.updatedAt >= staleAfterMilliseconds;
 
+  /** Resets the repository analysis for a rerun and refreshes the server-provided state. */
   const handleRerun = async () => {
     setRerunning(true);
     setRunError(null);

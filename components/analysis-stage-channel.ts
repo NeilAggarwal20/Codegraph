@@ -13,6 +13,10 @@ export interface AnalysisStageView {
   connected: boolean;
 }
 
+/**
+ * Subscribes to private stage broadcasts when enabled and removes the channel on cleanup.
+ * Returns the newer of the initial or received stage, plus connection status and errors.
+ */
 export function useAnalysisStageChannel(
   analysisId: string,
   initial: Omit<AnalysisStageView, 'connectionError' | 'connected'>,

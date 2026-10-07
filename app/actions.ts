@@ -9,6 +9,10 @@ import {
   runPreparedRepositoryAnalysis,
 } from '@/lib/pipeline/run-repository-analysis';
 
+/**
+ * Prepares or reuses a repository analysis and revalidates the dashboard.
+ * Converts preparation exceptions into an error result for the submitting client.
+ */
 export async function prepareRepositoryAnalysisAction(repoUrl: string, rerun = false) {
   let result: Awaited<ReturnType<typeof prepareRepositoryAnalysis>>;
   try {
@@ -20,6 +24,7 @@ export async function prepareRepositoryAnalysisAction(repoUrl: string, rerun = f
   return result;
 }
 
+/** Runs a prepared analysis through the pipeline's organization and claim checks. */
 export async function runPreparedRepositoryAnalysisAction(analysisId: string) {
   return await runPreparedRepositoryAnalysis(analysisId);
 }

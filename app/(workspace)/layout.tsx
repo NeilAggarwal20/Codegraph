@@ -7,6 +7,7 @@ import { ThemeControl } from "@/components/theme-control";
 import { AnalysisRealtimeProvider } from "@/components/analysis-realtime-provider";
 import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 
+/** Requires an active organization and provides the workspace theme, header, and Realtime client. */
 export default async function WorkspaceLayout({
   children,
 }: {

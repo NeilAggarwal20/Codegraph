@@ -23,6 +23,11 @@ export interface GitHubRepositoryInfo extends GitHubRepository {
   commitSha: string;
 }
 
+/**
+ * Validates an HTTPS GitHub repository URL and normalizes its owner, name, and URL.
+ * Removes a trailing .git suffix and rejects credentials, query strings, and fragments.
+ * @throws If the URL or either repository path segment is unsupported.
+ */
 export function parseGitHubRepositoryUrl(input: string): GitHubRepository {
   let url: URL;
   try {
@@ -54,6 +59,7 @@ export function parseGitHubRepositoryUrl(input: string): GitHubRepository {
   };
 }
 
+/** Fetches public GitHub JSON with a 30-second timeout and descriptive HTTP or network errors. */
 async function githubJson<T>(url: string, notFoundMessage: string): Promise<T> {
   let response: Response;
   try {
@@ -74,6 +80,7 @@ async function githubJson<T>(url: string, notFoundMessage: string): Promise<T> {
   return await response.json() as T;
 }
 
+/** Resolves a public repository's default branch to a validated commit SHA via GitHub's API. */
 export async function resolveGitHubRepository(repository: GitHubRepository): Promise<GitHubRepositoryInfo> {
   const metadata = await githubJson<{
     private: boolean;
@@ -99,6 +106,12 @@ export async function resolveGitHubRepository(repository: GitHubRepository): Pro
   };
 }
 
+/**
+ * Downloads the selected commit archive and extracts it into destination/repository.
+ * Limits the compressed download to 100 MiB; download and extraction each have a timeout.
+ * The caller must supply an existing workspace and clean up downloaded and extracted files.
+ * @throws If downloading, writing, or extracting the archive fails.
+ */
 export async function downloadAndExtractRepository(
   repository: GitHubRepositoryInfo,
   destination: string,
@@ -113,6 +126,7 @@ export async function downloadAndExtractRepository(
 
   let bytesReceived = 0;
   const sizeLimit = new Transform({
+    /** Forwards archive chunks until their cumulative size exceeds the download limit. */
     transform(chunk: Buffer, _encoding, callback) {
       bytesReceived += chunk.byteLength;
       if (bytesReceived > maximumArchiveBytes) {
@@ -145,10 +159,12 @@ export async function downloadAndExtractRepository(
   }
 }
 
+/** Creates a unique directory under the system temporary directory and returns its path. */
 export async function createRepositoryWorkspace(): Promise<string> {
   return await mkdtemp(path.join(os.tmpdir(), 'codegraph-repository-'));
 }
 
+/** Recursively removes a repository workspace, tolerating missing paths and retrying transient failures. */
 export async function removeRepositoryWorkspace(directory: string): Promise<void> {
   await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }

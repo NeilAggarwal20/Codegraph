@@ -20,10 +20,12 @@ export type AnalysisRunResult =
   | { status: 'completed' | 'already-running'; analysisId: string; commitSha?: string }
   | { status: 'failed'; analysisId: string; stage: string; error: string };
 
+/** Extracts an Error's message or supplies a fallback for other thrown values. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'An unknown error occurred.';
 }
 
+/** Converts parser output to the storage RPC's field names and attaches resolved import specifiers. */
 function makeStorageArtifact(result: ParserResult) {
   const specifierByEdge = new Map<string, string>();
   for (const record of result.coverage.records) {
@@ -59,6 +61,12 @@ function makeStorageArtifact(result: ParserResult) {
   };
 }
 
+/**
+ * Validates the repository URL and upserts its organization and project records.
+ * Returns the analysis ID and whether the preparation RPC queued work or reused a run.
+ * @param rerun - Requests a reset of an eligible existing analysis instead of reusing it.
+ * @throws If no organization is active or preparation fails.
+ */
 export async function prepareRepositoryAnalysis(repoUrl: string, rerun = false): Promise<AnalysisPreparationResult> {
   const repository = parseGitHubRepositoryUrl(repoUrl);
   const { orgId } = await auth();
@@ -116,6 +124,12 @@ if (prepareError || !preparedData) {
   };
 }
 
+/**
+ * Claims an analysis in the active organization, then fetches, parses, and stores its repository.
+ * Records pipeline failures with their stage and attempts temporary workspace cleanup.
+ * Returns the run outcome, or already-running when the claim is refused.
+ * @throws If authorization, project lookup, claiming, or repository URL validation fails.
+ */
 export async function runPreparedRepositoryAnalysis(analysisId: string): Promise<AnalysisRunResult> {
   const { orgId } = await auth();
   if (!orgId) throw new Error('Select an organization before running a repository analysis.');
@@ -147,6 +161,7 @@ export async function runPreparedRepositoryAnalysis(analysisId: string): Promise
   const repository = parseGitHubRepositoryUrl(project.repo_url);
 
   let stage = 'fetching';
+  /** Tracks the current failure stage and persists its progress message and timestamp. */
   const setStage = async (nextStage: string, message: string) => {
     stage = nextStage;
     const { error } = await supabase

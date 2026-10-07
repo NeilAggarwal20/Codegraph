@@ -4,12 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition, type FormEvent } from 'react';
 import { prepareRepositoryAnalysisAction } from '@/app/actions';
 
+/** Collects a public GitHub repository URL and displays analysis preparation feedback. */
 export function RepositoryAnalysisForm() {
   const router = useRouter();
   const [repoUrl, setRepoUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  /** Prevents native submission, prepares or reuses an analysis, and opens its progress page. */
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
